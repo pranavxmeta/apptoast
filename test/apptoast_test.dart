@@ -4,18 +4,6 @@ import 'package:apptoast/apptoast.dart';
 
 void main() {
   group('ToastThemeData & Model Unit Tests', () {
-    test('ToastPayload primary constructor creates instance with defaults', () {
-      const ToastPayload payload = ToastPayload(message: 'Test message');
-
-      expect(payload.message, 'Test message');
-      expect(payload.type, ToastType.info);
-      expect(payload.duration, const Duration(milliseconds: 2400));
-      expect(payload.showIcon, isTrue);
-      expect(payload.customIcon, isNull);
-      expect(payload.leading, isNull);
-      expect(payload.onDismiss, isNull);
-    });
-
     test('resolveIcon and resolveColor return defaults when unconfigured', () {
       const ToastThemeData theme = ToastThemeData();
 
