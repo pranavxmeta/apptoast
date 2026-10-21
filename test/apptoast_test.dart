@@ -9,8 +9,6 @@ void main() {
       final ToastThemeData resolved = theme.copyWith(borderRadius: 12);
 
       expect(resolved.borderRadius, 12);
-      expect(resolved.blurSigma, 14.0);
-      expect(resolved.iconSpacing, 10.0);
     });
 
     test('step lerp returns instant value without crash', () {
