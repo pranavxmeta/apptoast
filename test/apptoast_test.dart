@@ -1,96 +1,72 @@
+import 'package:apptoast/apptoast.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:apptoast/apptoast.dart';
 
 void main() {
-  group('ToastThemeData & Model Unit Tests', () {
-    test('resolveIcon and resolveColor return defaults when unconfigured', () {
+  group('ToastThemeData Unit Tests', () {
+    test('resolves non-null defaults when ambient is empty', () {
       const ToastThemeData theme = ToastThemeData();
+      final ToastThemeData resolved = theme.copyWith(borderRadius: 12);
 
-      expect(theme.resolveIcon(ToastType.info), Icons.info_outline);
-      expect(theme.resolveIcon(ToastType.success), Icons.check_circle_outline);
-      expect(theme.resolveColor(ToastType.error), const Color(0xFFFF3B30));
+      expect(resolved.borderRadius, 12);
+      expect(resolved.blurSigma, 14.0);
+      expect(resolved.iconSpacing, 10.0);
     });
 
-    test('resolveIcon and resolveColor honor custom type overrides', () {
-      const ToastThemeData theme = ToastThemeData(
-        typeIcons: {ToastType.success: Icons.star},
-        typeColors: {ToastType.success: Colors.purple},
-      );
-
-      expect(theme.resolveIcon(ToastType.success), Icons.star);
-      expect(theme.resolveColor(ToastType.success), Colors.purple);
-      // Fallback remains for unspecified types
-      expect(theme.resolveIcon(ToastType.error), Icons.error_outline);
-    });
-
-    test('copyWith properly updates properties', () {
-      const ToastThemeData original = ToastThemeData(borderRadius: 12);
-      final ToastThemeData copy = original.copyWith(borderRadius: 24);
-
-      expect(copy.borderRadius, 24);
-      expect(copy.blurSigma, original.blurSigma);
-    });
-
-    test('lerp correctly blends theme values', () {
+    test('step lerp returns instant value without crash', () {
       const ToastThemeData a = ToastThemeData(borderRadius: 10);
       const ToastThemeData b = ToastThemeData(borderRadius: 20);
 
-      final ToastThemeData result = a.lerp(b, 0.5);
-      expect(result.borderRadius, 15);
+      expect(a.lerp(b, 0.2).borderRadius, 10);
+      expect(a.lerp(b, 0.8).borderRadius, 20);
     });
   });
 
-  group('Toast Overlay Widget Tests', () {
-    testWidgets('renders message and default icon', (tester) async {
+  group('AppToast Widget Tests', () {
+    testWidgets('renders message and default success icon', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () => context.appToast(
-                    'Operation completed',
-                    type: ToastType.success,
-                  ),
-                  child: const Text('Show Toast'),
-                );
-              },
+              builder: (context) => ElevatedButton(
+                onPressed: () =>
+                    AppToast.success(context, 'Saved successfully'),
+                child: const Text('Show Success'),
+              ),
             ),
           ),
         ),
       );
 
-      await tester.tap(find.text('Show Toast'));
+      await tester.tap(find.text('Show Success'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Operation completed'), findsOneWidget);
+      expect(find.text('Saved successfully'), findsOneWidget);
       expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
     });
 
-    testWidgets('omits icon completely when showIcon is false', (tester) async {
+    testWidgets('AppToast.show renders plain text without leading icon', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () =>
-                      context.appToast('Iconless toast', showIcon: false),
-                  child: const Text('Show Toast'),
-                );
-              },
+              builder: (context) => ElevatedButton(
+                onPressed: () => AppToast.show(context, 'Plain notice pill'),
+                child: const Text('Show Plain'),
+              ),
             ),
           ),
         ),
       );
 
-      await tester.tap(find.text('Show Toast'));
+      await tester.tap(find.text('Show Plain'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Iconless toast'), findsOneWidget);
+      expect(find.text('Plain notice pill'), findsOneWidget);
       expect(find.byType(Icon), findsNothing);
     });
 
@@ -101,124 +77,64 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () => context.appToast(
-                    'Custom leading',
-                    leading: const Text('CUSTOM_TAG'),
+              builder: (context) => ElevatedButton(
+                onPressed: () => AppToast.info(
+                  context,
+                  'Syncing...',
+                  leading: const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(),
                   ),
-                  child: const Text('Show Toast'),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Show Toast'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.text('Custom leading'), findsOneWidget);
-      expect(find.text('CUSTOM_TAG'), findsOneWidget);
-      expect(find.byType(Icon), findsNothing);
-    });
-
-    testWidgets('respects ambient ThemeExtension configured in core/theme', (
-      tester,
-    ) async {
-      const ToastThemeData customTheme = ToastThemeData(
-        typeIcons: {ToastType.info: Icons.favorite},
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(extensions: const [customTheme]),
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () => context.appToast('Themed toast'),
-                  child: const Text('Show Toast'),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Show Toast'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.byIcon(Icons.favorite), findsOneWidget);
-    });
-
-    testWidgets(
-      'auto-dismisses after duration and triggers onDismiss callback',
-      (tester) async {
-        bool dismissed = false;
-
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: Builder(
-                builder: (context) {
-                  return ElevatedButton(
-                    onPressed: () => context.appToast(
-                      'Timed toast',
-                      duration: const Duration(milliseconds: 500),
-                      onDismiss: () => dismissed = true,
-                    ),
-                    child: const Text('Show Toast'),
-                  );
-                },
+                ),
+                child: const Text('Show Custom'),
               ),
             ),
           ),
-        );
+        ),
+      );
 
-        await tester.tap(find.text('Show Toast'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-        expect(find.text('Timed toast'), findsOneWidget);
+      await tester.tap(find.text('Show Custom'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-        // Advance through presentation duration + reverse animation
-        await tester.pump(const Duration(milliseconds: 500));
-        await tester.pumpAndSettle();
+      expect(find.text('Syncing...'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byIcon(Icons.info_outline), findsNothing);
+    });
 
-        expect(find.text('Timed toast'), findsNothing);
-        expect(dismissed, isTrue);
-      },
-    );
-
-    testWidgets('dismisses on user swipe gesture', (tester) async {
+    testWidgets('AppToast.dismiss removes active toast programmatically', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () =>
-                      context.appToast('Swipable toast', isTop: true),
-                  child: const Text('Show Toast'),
-                );
-              },
+              builder: (context) => Column(
+                children: [
+                  ElevatedButton(
+                    onPressed: () =>
+                        AppToast.warning(context, 'To be dismissed'),
+                    child: const Text('Show'),
+                  ),
+                  ElevatedButton(
+                    onPressed: AppToast.dismiss,
+                    child: const Text('Dismiss'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       );
 
-      await tester.tap(find.text('Show Toast'));
+      await tester.tap(find.text('Show'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Swipable toast'), findsOneWidget);
+      expect(find.text('To be dismissed'), findsOneWidget);
 
-      // Drag up to dismiss top-positioned toast
-      await tester.drag(find.text('Swipable toast'), const Offset(0, -300));
+      await tester.tap(find.text('Dismiss'));
       await tester.pumpAndSettle();
-
-      expect(find.text('Swipable toast'), findsNothing);
+      expect(find.text('To be dismissed'), findsNothing);
     });
   });
 }

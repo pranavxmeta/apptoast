@@ -3,16 +3,48 @@ import 'dart:ui';
 
 import 'package:material_ui/material_ui.dart';
 
-/// Enhanced enum binding visual identity and defaults to each toast variant.
-enum ToastType(final Color accentColor, final IconData icon) {
-  info(Color(0xFFFF9000), Icons.info_outline),
-  success(Color(0xFF34C759), Icons.check_circle_outline),
-  warning(Color(0xFFFFCC00), Icons.warning_amber_rounded),
-  error(Color(0xFFFF3B30), Icons.error_outline);
+/// Enhanced callable enum providing variant identity, default icons, and direct invocation.
+/// Uses Dart 3.13 primary constructor declaring parameters.
+enum AppToast(final Color? accentColor, final Widget? defaultWidget) {
+  info(Color(0xFFFF9000), Icon(Icons.info_outline)),
+  success(Color(0xFF34C759), Icon(Icons.check_circle_outline)),
+  warning(Color(0xFFFFCC00), Icon(Icons.warning_amber_rounded)),
+  error(Color(0xFFFF3B30), Icon(Icons.error_outline)),
+  show(null, null);
+
+  /// Callable invocation: allows `AppToast.success(context, '...')` or `AppToast.show(context, '...')`.
+  void call(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(milliseconds: 2400),
+    Widget? leading,
+    bool showIcon = true,
+    bool isTop = true,
+    ToastThemeData? theme,
+    VoidCallback? onDismiss,
+  }) => _show(
+    context,
+    message,
+    this,
+    duration: duration,
+    leading: leading,
+    showIcon: showIcon,
+    isTop: isTop,
+    theme: theme,
+    onDismiss: onDismiss,
+  );
+
+  /// Dismisses currently presented toast from anywhere without BuildContext.
+  static void dismiss() {
+    final state = _key?.currentState;
+    if (state != null) {
+      state.dismiss();
+    } else {
+      _dismissSync();
+    }
+  }
 }
 
-/// Design tokens and theme extension for the AppToast system.
-/// Uses Dart 3.13 primary constructor declaring parameters.
 @immutable
 class const ToastThemeData({
   final Color? backgroundColor,
@@ -25,65 +57,47 @@ class const ToastThemeData({
   ),
   final EdgeInsetsGeometry margin = const EdgeInsets.symmetric(horizontal: 20),
   final double blurSigma = 14.0,
-  final double iconSize = 20.0,
   final double iconSpacing = 10.0,
-  final Map<ToastType, IconData>? typeIcons,
-  final Map<ToastType, Color>? typeColors,
+  final Map<AppToast, Widget>? typeWidgets,
 }) extends ThemeExtension<ToastThemeData> {
-  /// Resolves effective theme from caller context, ambient extension, and brightness.
+  /// Resolves ambient + local overrides with non-null per-property fallbacks.
   static ToastThemeData resolve(BuildContext context, [ToastThemeData? local]) {
-    final ThemeData theme = Theme.of(context);
-    final ToastThemeData? ambient = theme.extension<ToastThemeData>();
-    final bool isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ambient = Theme.of(context).extension<ToastThemeData>();
 
-    final (Color bg, Color border, Color fg) = isDark
-        ? (const Color(0xE618181B), const Color(0x1FFFFFFF), Colors.white)
-        : (
-            const Color(0xEBFFFFFF),
-            const Color(0x14000000),
-            const Color(0xFF18181B),
-          );
-
-    final TextStyle style = const TextStyle(
-      fontSize: 14.5,
-      fontWeight: FontWeight.w500,
-      decoration: TextDecoration.none,
-      letterSpacing: -0.2,
-    ).copyWith(color: fg);
-
-    final ToastThemeData base =
-        ambient ??
-        ToastThemeData(
-          backgroundColor: bg,
-          borderColor: border,
-          textStyle: style,
-        );
-
-    if (local == null) {
-      return base.copyWith(
-        backgroundColor: base.backgroundColor ?? bg,
-        borderColor: base.borderColor ?? border,
-        textStyle: base.textStyle ?? style,
-      );
-    }
-
-    return base.copyWith(
-      backgroundColor: local.backgroundColor,
-      borderColor: local.borderColor,
-      textStyle: local.textStyle,
-      borderRadius: local.borderRadius,
-      padding: local.padding,
-      margin: local.margin,
-      blurSigma: local.blurSigma,
-      iconSize: local.iconSize,
-      iconSpacing: local.iconSpacing,
-      typeIcons: local.typeIcons,
-      typeColors: local.typeColors,
+    return ToastThemeData(
+      backgroundColor:
+          local?.backgroundColor ??
+          ambient?.backgroundColor ??
+          (isDark ? const Color(0xE618181B) : const Color(0xEBFFFFFF)),
+      borderColor:
+          local?.borderColor ??
+          ambient?.borderColor ??
+          (isDark ? const Color(0x1FFFFFFF) : const Color(0x14000000)),
+      textStyle:
+          local?.textStyle ??
+          ambient?.textStyle ??
+          TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w500,
+            color: isDark ? Colors.white : const Color(0xFF18181B),
+            decoration: TextDecoration.none,
+            letterSpacing: -0.2,
+          ),
+      borderRadius: local?.borderRadius ?? ambient?.borderRadius ?? 20.0,
+      padding:
+          local?.padding ??
+          ambient?.padding ??
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      margin:
+          local?.margin ??
+          ambient?.margin ??
+          const EdgeInsets.symmetric(horizontal: 20),
+      blurSigma: local?.blurSigma ?? ambient?.blurSigma ?? 14.0,
+      iconSpacing: local?.iconSpacing ?? ambient?.iconSpacing ?? 10.0,
+      typeWidgets: local?.typeWidgets ?? ambient?.typeWidgets,
     );
   }
-
-  IconData resolveIcon(ToastType type) => typeIcons?[type] ?? type.icon;
-  Color resolveColor(ToastType type) => typeColors?[type] ?? type.accentColor;
 
   @override
   ToastThemeData copyWith({
@@ -94,10 +108,8 @@ class const ToastThemeData({
     EdgeInsetsGeometry? padding,
     EdgeInsetsGeometry? margin,
     double? blurSigma,
-    double? iconSize,
     double? iconSpacing,
-    Map<ToastType, IconData>? typeIcons,
-    Map<ToastType, Color>? typeColors,
+    Map<AppToast, Widget>? typeWidgets,
   }) => ToastThemeData(
     backgroundColor: backgroundColor ?? this.backgroundColor,
     borderColor: borderColor ?? this.borderColor,
@@ -106,160 +118,91 @@ class const ToastThemeData({
     padding: padding ?? this.padding,
     margin: margin ?? this.margin,
     blurSigma: blurSigma ?? this.blurSigma,
-    iconSize: iconSize ?? this.iconSize,
     iconSpacing: iconSpacing ?? this.iconSpacing,
-    typeIcons: typeIcons ?? this.typeIcons,
-    typeColors: typeColors ?? this.typeColors,
+    typeWidgets: typeWidgets ?? this.typeWidgets,
   );
 
   @override
-  ToastThemeData lerp(ThemeExtension<ToastThemeData>? other, double t) {
-    if (other is! ToastThemeData) return this;
-    return ToastThemeData(
-      backgroundColor: Color.lerp(backgroundColor, other.backgroundColor, t),
-      borderColor: Color.lerp(borderColor, other.borderColor, t),
-      textStyle: TextStyle.lerp(textStyle, other.textStyle, t),
-      borderRadius:
-          lerpDouble(borderRadius, other.borderRadius, t) ?? borderRadius,
-      padding: EdgeInsetsGeometry.lerp(padding, other.padding, t) ?? padding,
-      margin: EdgeInsetsGeometry.lerp(margin, other.margin, t) ?? margin,
-      blurSigma: lerpDouble(blurSigma, other.blurSigma, t) ?? blurSigma,
-      iconSize: lerpDouble(iconSize, other.iconSize, t) ?? iconSize,
-      iconSpacing: lerpDouble(iconSpacing, other.iconSpacing, t) ?? iconSpacing,
-      typeIcons: t < 0.5 ? typeIcons : other.typeIcons,
-      typeColors: t < 0.5 ? typeColors : other.typeColors,
-    );
-  }
+  ToastThemeData lerp(ThemeExtension<ToastThemeData>? other, double t) =>
+      other is! ToastThemeData ? this : (t < 0.5 ? this : other);
 }
 
-/// Overlay controller and presentation manager.
-final class AppToast {
-  AppToast._();
+// Overlay Presentation Engine
 
-  static OverlayEntry? _activeEntry;
-  static GlobalKey<_ToastPillState>? _activeKey;
+OverlayEntry? _entry;
+GlobalKey<_ToastPillState>? _key;
 
-  /// Main entry point for presenting toasts with caller context theme capture.
-  static void show(
-    BuildContext context,
-    String message, {
-    ToastType type = ToastType.info,
-    Duration duration = const Duration(milliseconds: 2400),
-    IconData? customIcon,
-    Widget? leading,
-    bool showIcon = true,
-    bool isTop = true,
-    ToastThemeData? theme,
-    VoidCallback? onDismiss,
-  }) {
-    if (!context.mounted) return;
+void _show(
+  BuildContext context,
+  String message,
+  AppToast type, {
+  required Duration duration,
+  required Widget? leading,
+  required bool showIcon,
+  required bool isTop,
+  required ToastThemeData? theme,
+  required VoidCallback? onDismiss,
+}) {
+  if (!context.mounted) return;
 
-    final ToastThemeData effectiveTheme = ToastThemeData.resolve(
-      context,
-      theme,
-    );
-    dismiss();
+  final effectiveTheme = ToastThemeData.resolve(context, theme);
+  _dismissSync();
 
-    final OverlayState? overlay = Overlay.maybeOf(context, rootOverlay: true);
-    if (overlay == null) return;
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) return;
 
-    final GlobalKey<_ToastPillState> key = GlobalKey<_ToastPillState>();
-    _activeKey = key;
+  final key = GlobalKey<_ToastPillState>();
+  _key = key;
 
-    late final OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (context) {
-        final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(context);
-
-        return SafeArea(
-          child: Align(
-            alignment: isTop ? Alignment.topCenter : Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: isTop ? 16 : 0,
-                bottom: isTop ? 0 : (24 + viewInsets.bottom),
-              ),
-              child: _ToastPill(
-                key: key,
-                message: message,
-                type: type,
-                duration: duration,
-                isTop: isTop,
-                showIcon: showIcon,
-                theme: effectiveTheme,
-                customIcon: customIcon,
-                leading: leading,
-                onDismiss: onDismiss,
-                onFinished: () => _clean(entry),
-              ),
-            ),
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (ctx) => SafeArea(
+      child: Align(
+        alignment: isTop ? Alignment.topCenter : Alignment.bottomCenter,
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: isTop ? 16 : 0,
+            bottom: isTop ? 0 : 24 + MediaQuery.viewInsetsOf(ctx).bottom,
           ),
-        );
-      },
-    );
-
-    _activeEntry = entry;
-    overlay.insert(entry);
-  }
-
-  /// Programmatically triggers smooth exit on current active toast.
-  static void dismiss() {
-    if (_activeKey?.currentState != null) {
-      _activeKey!.currentState!.dismiss();
-    } else {
-      _activeEntry?.remove();
-      _activeEntry = null;
-    }
-  }
-
-  static void _clean(OverlayEntry entry) {
-    if (_activeEntry == entry) {
-      _activeEntry?.remove();
-      _activeEntry = null;
-      _activeKey = null;
-    }
-  }
-}
-
-/// Ergonomic BuildContext extension.
-extension ToastContextExtension on BuildContext {
-  void appToast(
-    String message, {
-    ToastType type = ToastType.info,
-    Duration duration = const Duration(milliseconds: 2400),
-    IconData? customIcon,
-    Widget? leading,
-    bool showIcon = true,
-    bool isTop = true,
-    ToastThemeData? theme,
-    VoidCallback? onDismiss,
-  }) => AppToast.show(
-    this,
-    message,
-    type: type,
-    duration: duration,
-    customIcon: customIcon,
-    leading: leading,
-    showIcon: showIcon,
-    isTop: isTop,
-    theme: theme,
-    onDismiss: onDismiss,
+          child: _ToastPill(
+            key: key,
+            message: message,
+            type: type,
+            duration: duration,
+            isTop: isTop,
+            showIcon: showIcon,
+            theme: effectiveTheme,
+            leading: leading,
+            onDismiss: onDismiss,
+            onFinished: () {
+              if (_entry == entry) _dismissSync();
+            },
+          ),
+        ),
+      ),
+    ),
   );
 
-  void dismissAppToast() => AppToast.dismiss();
+  _entry = entry;
+  overlay.insert(entry);
 }
 
-/// Physics-driven animated pill without DTO layer indirection.
+void _dismissSync() {
+  _entry?.remove();
+  _entry = null;
+  _key = null;
+}
+
+/// Physics-driven animated pill with combined affine transform.
 class const _ToastPill({
   super.key,
   required final String message,
-  required final ToastType type,
+  required final AppToast type,
   required final Duration duration,
   required final bool isTop,
   required final bool showIcon,
   required final ToastThemeData theme,
   required final VoidCallback onFinished,
-  final IconData? customIcon,
   final Widget? leading,
   final VoidCallback? onDismiss,
 }) extends StatefulWidget {
@@ -269,13 +212,14 @@ class const _ToastPill({
 
 class _ToastPillState extends State<_ToastPill>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
+  bool _isDismissing = false;
+  late final _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 260),
     reverseDuration: const Duration(milliseconds: 200),
   );
 
-  late final CurvedAnimation _curve = CurvedAnimation(
+  late final _curve = CurvedAnimation(
     parent: _controller,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeIn,
@@ -287,19 +231,28 @@ class _ToastPillState extends State<_ToastPill>
   void initState() {
     super.initState();
     _controller.forward().then((_) {
-      if (!mounted) return;
-      _timer = Timer(widget.duration, dismiss);
+      if (mounted && !_isDismissing) {
+        _timer = Timer(widget.duration, dismiss);
+      }
     });
   }
 
   Future<void> dismiss() async {
     _timer?.cancel();
-    if (!mounted || _controller.isDismissed) return;
+    if (!mounted || _isDismissing || _controller.isDismissed) return;
+    _isDismissing = true;
     await _controller.reverse();
     if (mounted) {
       widget.onDismiss?.call();
       widget.onFinished();
     }
+  }
+
+  void _handleSwipeDismiss() {
+    _timer?.cancel();
+    _isDismissing = true;
+    widget.onDismiss?.call();
+    widget.onFinished();
   }
 
   @override
@@ -311,31 +264,32 @@ class _ToastPillState extends State<_ToastPill>
 
   @override
   Widget build(BuildContext context) {
-    final ToastThemeData theme = widget.theme;
+    final theme = widget.theme;
+    final Widget? leadingWidget =
+        widget.leading ??
+        theme.typeWidgets?[widget.type] ??
+        widget.type.defaultWidget;
 
-    return Padding(
-      padding: theme.margin,
-      child: AnimatedBuilder(
-        animation: _curve,
-        builder: (context, child) => Opacity(
-          opacity: _curve.value.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(
-              0,
-              (widget.isTop ? -24.0 : 24.0) * (1.0 - _curve.value),
-            ),
-            child: Transform.scale(
-              scale: 0.94 + (0.06 * _curve.value),
-              child: child,
-            ),
+    return AnimatedBuilder(
+      animation: _curve,
+      builder: (context, child) {
+        final double curv = _curve.value;
+        return Transform.translate(
+          offset: Offset(0, (widget.isTop ? -24.0 : 24.0) * (1.0 - curv)),
+          child: Transform.scale(
+            scale: 0.94 + 0.06 * curv,
+            child: Opacity(opacity: curv.clamp(0.0, 1.0), child: child),
           ),
-        ),
-        child: Dismissible(
-          key: const ValueKey('apptoast_dismissible'),
-          direction: widget.isTop ? DismissDirection.up : DismissDirection.down,
-          onDismissed: (_) => dismiss(),
-          child: GestureDetector(
-            onTap: dismiss,
+        );
+      },
+      child: Dismissible(
+        key: const ValueKey('apptoast_dismissible'),
+        direction: widget.isTop ? DismissDirection.up : DismissDirection.down,
+        onDismissed: (_) => _handleSwipeDismiss(),
+        child: GestureDetector(
+          onTap: dismiss,
+          child: Padding(
+            padding: theme.margin,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(theme.borderRadius),
               child: BackdropFilter(
@@ -363,14 +317,14 @@ class _ToastPillState extends State<_ToastPill>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (widget.showIcon) ...[
-                        widget.leading ??
-                            Icon(
-                              widget.customIcon ??
-                                  theme.resolveIcon(widget.type),
-                              color: theme.resolveColor(widget.type),
-                              size: theme.iconSize,
-                            ),
+                      if (widget.showIcon && leadingWidget != null) ...[
+                        IconTheme(
+                          data: IconThemeData(
+                            size: 20,
+                            color: widget.type.accentColor,
+                          ),
+                          child: leadingWidget,
+                        ),
                         SizedBox(width: theme.iconSpacing),
                       ],
                       Flexible(
